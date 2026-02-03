@@ -87,7 +87,7 @@ jobs:
             --cpu=8 \
             --memory=16Gi \
             --timeout=3600 \
-            --max-instances=100 \
+            --max-instances=2 \
             --min-instances=0 \
             --concurrency=1 \
             --no-allow-unauthenticated \
@@ -137,7 +137,7 @@ jobs:
             --memory=8Gi \
             --cpu=4 \
             --timeout=1800s \
-            --max-instances=100 \
+            --max-instances=2 \
             --set-env-vars="PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}"
       
       - name: Deployment Complete

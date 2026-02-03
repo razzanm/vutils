@@ -8,7 +8,7 @@ resource "google_cloud_run_v2_service" "process_video_large" {
     
     scaling {
       min_instance_count = 0
-      max_instance_count = 100
+      max_instance_count = 2  # Limited by default quota (20 vCPUs = 2 instances × 8 vCPUs)
     }
     
     max_instance_request_concurrency = 1  # 1 job per instance
