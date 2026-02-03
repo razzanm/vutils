@@ -1,0 +1,136 @@
+name: Deploy to GCP
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  GCP_REGION: asia-southeast1
+  CLOUD_RUN_SERVICE: process-video-large
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+      id-token: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+      
+      - name: Configure Docker for GCR
+        run: |
+          gcloud auth configure-docker gcr.io
+      
+      # Build and push Cloud Run Docker image
+      - name: Build and Push Cloud Run Image
+        run: |
+          cd services/process-video-large
+          docker build -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/process-video-large:latest \
+                       -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/process-video-large:${{ github.sha }} .
+          docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/process-video-large:latest
+          docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/process-video-large:${{ github.sha }}
+      
+      # Deploy Infrastructure with Terraform
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.0
+      
+      - name: Terraform Init
+        run: |
+          cd terraform
+          terraform init
+      
+      - name: Terraform Plan
+        run: |
+          cd terraform
+          terraform plan -out=tfplan \
+            -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
+            -var="region=${{ env.GCP_REGION }}"
+        continue-on-error: true
+      
+      - name: Terraform Apply
+        run: |
+          cd terraform
+          terraform apply -auto-approve tfplan
+        continue-on-error: true
+      
+      # Deploy/Update Cloud Run Service
+      - name: Deploy Cloud Run Service
+        run: |
+          gcloud run deploy process-video-large \
+            --image=gcr.io/${{ secrets.GCP_PROJECT_ID }}/process-video-large:latest \
+            --region=${{ env.GCP_REGION }} \
+            --platform=managed \
+            --cpu=8 \
+            --memory=16Gi \
+            --timeout=3600 \
+            --max-instances=100 \
+            --min-instances=0 \
+            --concurrency=1 \
+            --no-allow-unauthenticated \
+            --set-env-vars="PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}" \
+            --quiet
+      
+      # Deploy Cloud Functions
+      - name: Deploy Generate Upload URL Function
+        run: |
+          gcloud functions deploy generate-upload-url \
+            --gen2 \
+            --region=${{ env.GCP_REGION }} \
+            --runtime=python311 \
+            --source=functions/generate-upload-url \
+            --entry-point=generate_upload_url \
+            --trigger-http \
+            --allow-unauthenticated \
+            --memory=256Mi \
+            --timeout=60s \
+            --max-instances=100 \
+            --set-env-vars="PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}"
+      
+      - name: Deploy Trigger Conversion Function
+        run: |
+          gcloud functions deploy trigger-conversion \
+            --gen2 \
+            --region=${{ env.GCP_REGION }} \
+            --runtime=python311 \
+            --source=functions/trigger-conversion \
+            --entry-point=trigger_conversion \
+            --trigger-bucket=${{ secrets.GCP_PROJECT_ID }}-uploads \
+            --memory=512Mi \
+            --timeout=60s \
+            --max-instances=100 \
+            --set-env-vars="PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}"
+      
+      - name: Deploy Process Small Videos Function
+        run: |
+          gcloud functions deploy process-video-small \
+            --gen2 \
+            --region=${{ env.GCP_REGION }} \
+            --runtime=python311 \
+            --source=functions/process-video-small \
+            --entry-point=process_video \
+            --trigger-http \
+            --no-allow-unauthenticated \
+            --memory=8Gi \
+            --cpu=4 \
+            --timeout=1800s \
+            --max-instances=100 \
+            --set-env-vars="PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}"
+      
+      - name: Deployment Complete
+        run: |
+          echo "✅ Deployment completed successfully!"
+          echo "Region: ${{ env.GCP_REGION }}"
