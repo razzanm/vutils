@@ -25,7 +25,8 @@ gcloud services enable \
   firestore.googleapis.com \
   storage.googleapis.com \
   appengine.googleapis.com \
-  containerregistry.googleapis.com
+  containerregistry.googleapis.com \
+  cloudresourcemanager.googleapis.com
 echo "✅ APIs enabled"
 echo ""
 
@@ -51,6 +52,7 @@ for role in \
   cloudfunctions.admin \
   run.admin \
   storage.admin \
+  artifactregistry.admin \
   datastore.user \
   iam.serviceAccountUser \
   cloudbuild.builds.editor \

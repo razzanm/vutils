@@ -29,6 +29,11 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
       
+      - name: Enable Container Registry API
+        run: |
+          gcloud services enable containerregistry.googleapis.com
+          gcloud services enable cloudresourcemanager.googleapis.com
+      
       - name: Configure Docker for GCR
         run: |
           gcloud auth configure-docker gcr.io
