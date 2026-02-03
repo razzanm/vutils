@@ -68,6 +68,7 @@ def convert_video():
             'ffmpeg',
             '-y',
             '-i', input_path,
+            '-q:v', '2',
             '-c:a', 'copy',
             output_path
         ]

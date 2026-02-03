@@ -33,7 +33,7 @@ sleep 3
 
 echo "Testing R2 conversion trigger..."
 # Note: Input key must exist in the INPUT_BUCKET
-INPUT_KEY="WhatCarCanYouGetForAGrand_copy.mp4" 
+INPUT_KEY="more_than_200mb_file.mp4" 
 
 # Payload
 JSON_DATA=$(cat <<EOF
