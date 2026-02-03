@@ -15,7 +15,7 @@ docker stop $CONTAINER_NAME 2>/dev/null || true
 docker rm $CONTAINER_NAME 2>/dev/null || true
 
 echo "Running container..."
-docker run -d -p $PORT:5000 --name $CONTAINER_NAME $APP_NAME
+docker run -d -p $PORT:8080 --name $CONTAINER_NAME $APP_NAME
 
 echo "Waiting for service to start..."
 sleep 3

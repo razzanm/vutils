@@ -20,7 +20,7 @@ docker rm $CONTAINER_NAME 2>/dev/null || true
 
 echo "Running container..."
 # Passing env vars from host to container
-docker run -d -p $PORT:5000 \
+docker run -d -p $PORT:8080 \
   -e R2_ENDPOINT_URL="$R2_ENDPOINT_URL" \
   -e R2_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" \
   -e R2_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" \
