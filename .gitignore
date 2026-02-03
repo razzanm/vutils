@@ -1,37 +1,18 @@
-# Terraform
-.terraform/
-.terraform.lock.hcl
-terraform.tfstate
-terraform.tfstate.backup
-*.tfvars
-!terraform.tfvars.example
-
 # Python
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-env/
+*.pyc
 venv/
-*.egg-info/
-dist/
-build/
+.env
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
+# Docker
+.dockerignore
 
 # OS
 .DS_Store
-Thumbs.db
 
-# Logs
-*.log
-
-# Environment
-.env
-.env.local
+# Project specific
+test_input.mp4
+test_output.avi
+*converted*
+*.mp4
+*.avi
