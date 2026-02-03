@@ -109,7 +109,14 @@ jobs:
             --memory=256Mi \
             --timeout=60s \
             --max-instances=100 \
-            --set-env-vars="PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}"
+            --set-env-vars="PROJECT_ID=${{secrets.GCP_PROJECT_ID }}"
+      
+      - name: Grant Eventarc Service Account Permissions
+        run: |
+          PROJECT_NUMBER=$(gcloud projects describe ${{ secrets.GCP_PROJECT_ID }} --format="value(projectNumber)")
+          EVENTARC_SA="service-${PROJECT_NUMBER}@gcp-sa-eventarc.iam.gserviceaccount.com"
+          gsutil iam ch serviceAccount:${EVENTARC_SA}:objectViewer gs://${{ secrets.GCP_PROJECT_ID }}-uploads
+          gsutil iam ch serviceAccount:${EVENTARC_SA}:legacyBucketReader gs://${{ secrets.GCP_PROJECT_ID }}-uploads
       
       - name: Deploy Trigger Conversion Function
         run: |
