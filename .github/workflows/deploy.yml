@@ -108,7 +108,7 @@ jobs:
             --allow-unauthenticated \
             --memory=256Mi \
             --timeout=60s \
-            --max-instances=100 \
+            --max-instances=10 \
             --set-env-vars="PROJECT_ID=${{secrets.GCP_PROJECT_ID }}"
       
       - name: Grant Eventarc Service Account Permissions
@@ -129,7 +129,7 @@ jobs:
             --trigger-bucket=${{ secrets.GCP_PROJECT_ID }}-uploads \
             --memory=512Mi \
             --timeout=60s \
-            --max-instances=100 \
+            --max-instances=2 \
             --set-env-vars="PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}"
       
       - name: Deploy Process Small Videos Function
