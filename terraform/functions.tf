@@ -70,7 +70,7 @@ resource "google_cloudfunctions2_function" "generate_upload_url" {
   }
   
   service_config {
-    max_instance_count    = 100
+    max_instance_count    = 10  # Lightweight URL generation
     min_instance_count    = 0
     available_memory      = "256Mi"
     timeout_seconds       = 60
@@ -108,7 +108,7 @@ resource "google_cloudfunctions2_function" "trigger_conversion" {
   }
   
   service_config {
-    max_instance_count    = 100
+    max_instance_count    = 2  # Limited by quota
     min_instance_count    = 0
     available_memory      = "512Mi"
     timeout_seconds       = 60
@@ -159,7 +159,7 @@ resource "google_cloudfunctions2_function" "process_video_small" {
   }
   
   service_config {
-    max_instance_count               = 100
+    max_instance_count               = 2  # Limited by quota (4 vCPU × 2 = 8 vCPUs)
     min_instance_count               = 0
     available_memory                 = "8Gi"
     available_cpu                    = "4"
