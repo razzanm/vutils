@@ -26,7 +26,8 @@ gcloud services enable \
   storage.googleapis.com \
   appengine.googleapis.com \
   containerregistry.googleapis.com \
-  cloudresourcemanager.googleapis.com
+  cloudresourcemanager.googleapis.com \
+  eventarc.googleapis.com
 echo "✅ APIs enabled"
 echo ""
 
