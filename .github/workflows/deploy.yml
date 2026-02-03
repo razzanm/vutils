@@ -111,6 +111,16 @@ jobs:
             --max-instances=10 \
             --set-env-vars="PROJECT_ID=${{secrets.GCP_PROJECT_ID }}"
       
+      - name: Grant Cloud Storage Service Account Permissions
+        run: |
+          PROJECT_NUMBER=$(gcloud projects describe ${{ secrets.GCP_PROJECT_ID }} --format="value(projectNumber)")
+          GCS_SA="service-${PROJECT_NUMBER}@gs-project-accounts.iam.gserviceaccount.com"
+          
+          # Grant Pub/Sub Publisher role for Eventarc triggers
+          gcloud projects add-iam-policy-binding ${{ secrets.GCP_PROJECT_ID }} \
+            --member="serviceAccount:${GCS_SA}" \
+            --role="roles/pubsub.publisher"
+      
       - name: Grant Eventarc Service Account Permissions
         run: |
           PROJECT_NUMBER=$(gcloud projects describe ${{ secrets.GCP_PROJECT_ID }} --format="value(projectNumber)")

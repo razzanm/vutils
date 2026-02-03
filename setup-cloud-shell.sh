@@ -68,6 +68,17 @@ done
 echo "✅ All permissions granted"
 echo ""
 
+# Grant GCS service account Pub/Sub publisher for Eventarc
+echo "🔐 Step 6: Granting Cloud Storage service account Pub/Sub permissions..."
+PROJECT_NUMBER=$(gcloud projects describe $GCP_PROJECT_ID --format="value(projectNumber)")
+GCS_SA="service-${PROJECT_NUMBER}@gs-project-accounts.iam.gserviceaccount.com"
+gcloud projects add-iam-policy-binding $GCP_PROJECT_ID \
+  --member="serviceAccount:${GCS_SA}" \
+  --role="roles/pubsub.publisher" \
+  --quiet 2>/dev/null || echo "  ⚠️  Already has pubsub.publisher"
+echo "✅ GCS service account configured"
+echo ""
+
 # Create key
 echo "🔑 Step 6: Creating service account key..."
 gcloud iam service-accounts keys create github-actions-key.json \
