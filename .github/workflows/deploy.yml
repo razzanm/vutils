@@ -69,8 +69,13 @@ jobs:
       - name: Terraform Apply
         run: |
           cd terraform
-          terraform apply -auto-approve tfplan
-        continue-on-error: true
+          # Apply and continue even if some resources already exist
+          terraform apply -auto-approve tfplan || true
+          # Refresh state to capture existing resources  
+          terraform refresh \
+            -var="project_id=${{ secrets.GCP_PROJECT_ID }}" \
+            -var="region=${{ env.GCP_REGION }}" || true
+        continue-on-error: false
       
       # Deploy/Update Cloud Run Service
       - name: Deploy Cloud Run Service
