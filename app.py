@@ -2,6 +2,8 @@ import os
 import subprocess
 import uuid
 import boto3
+import requests
+import traceback
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
@@ -15,6 +17,7 @@ R2_ACCESS_KEY_ID = os.environ.get('R2_ACCESS_KEY_ID')
 R2_SECRET_ACCESS_KEY = os.environ.get('R2_SECRET_ACCESS_KEY')
 INPUT_BUCKET = os.environ.get('INPUT_BUCKET')
 OUTPUT_BUCKET = os.environ.get('OUTPUT_BUCKET')
+STATUS_API_BASE_URL = "https://converter-status.rajan-1si18cs083.workers.dev"
 
 def get_r2_client():
     return boto3.client(
@@ -24,77 +27,140 @@ def get_r2_client():
         aws_secret_access_key=R2_SECRET_ACCESS_KEY
     )
 
+def update_job_status(job_id, status, progress=None, message=None, output_key=None):
+    """Updates the job status via the Status API."""
+    url = f"{STATUS_API_BASE_URL}/update"
+    payload = {
+        "jobId": job_id,
+        "status": status
+    }
+    if progress is not None:
+        payload["progress"] = progress
+    if message:
+        payload["message"] = message
+    if output_key:
+        payload["outputKey"] = output_key
+    
+    try:
+        response = requests.post(url, json=payload, timeout=10)
+        response.raise_for_status()
+        print(f"Status updated for {job_id}: {status}")
+    except Exception as e:
+        print(f"Failed to update status for {job_id}: {e}")
+
+def get_job_details(job_id):
+    """Fetches job details to get the input filename."""
+    url = f"{STATUS_API_BASE_URL}/status/{job_id}"
+    response = requests.get(url, timeout=10)
+    response.raise_for_status()
+    return response.json()
+
 @app.route('/convert', methods=['POST'])
 def convert_video():
     data = request.get_json()
-    if not data or 'input_key' not in data:
-        return jsonify({'error': 'Missing input_key in request body'}), 400
+    if not data or 'jobId' not in data:
+        return jsonify({'error': 'Missing jobId in request body'}), 400
     
-    input_key = data['input_key']
-    target_format = data.get('format', 'avi')
-    output_key = data.get('output_key')
-    
-    # Use env vars for buckets, fallback to request data if needed (optional)
-    input_bucket_name = INPUT_BUCKET or data.get('input_bucket')
-    output_bucket_name = OUTPUT_BUCKET or data.get('output_bucket')
+    job_id = data['jobId']
+    target_format = data.get('format', 'mp4')
+    # options = data.get('options', {}) # Reserved for future use
 
-    if not input_bucket_name or not output_bucket_name:
-        return jsonify({'error': 'Input and Output buckets must be configured via env vars or request'}), 500
+    print(f"Received job {job_id} for format {target_format}")
 
-    # Local paths
+    # 1. Start Processing
+    update_job_status(job_id, "processing", 0, "Processing started...")
+
     file_id = str(uuid.uuid4())
-    input_filename = f"{file_id}_{os.path.basename(input_key)}"
-    input_path = os.path.join(UPLOAD_FOLDER, input_filename)
-    
-    output_extension = f".{target_format}" if not target_format.startswith('.') else target_format
-    output_filename = f"{file_id}_converted{output_extension}"
-    output_path = os.path.join(UPLOAD_FOLDER, output_filename)
-
-    # Determine final output key if not provided
-    if not output_key:
-        base_name = os.path.splitext(os.path.basename(input_key))[0]
-        output_key = f"{base_name}{output_extension}"
+    input_path = None
+    output_path = None
 
     try:
+        # Check if buckets are configured
+        if not INPUT_BUCKET or not OUTPUT_BUCKET:
+            raise ValueError("INPUT_BUCKET and OUTPUT_BUCKET must be set in environment variables.")
+
+        # 2. Fetch Metadata
+        print(f"Fetching metadata for job {job_id}...")
+        job_metadata = get_job_details(job_id)
+        input_key = job_metadata.get('fileName')
+        
+        if not input_key:
+            raise ValueError("fileName not found in job metadata")
+
+        # Setup paths
+        input_filename = f"{file_id}_{os.path.basename(input_key)}"
+        input_path = os.path.join(UPLOAD_FOLDER, input_filename)
+        
+        output_extension = f".{target_format}" if not target_format.startswith('.') else target_format
+        output_filename = f"{file_id}_converted{output_extension}"
+        output_path = os.path.join(UPLOAD_FOLDER, output_filename)
+        
+        # Consistent naming convention for output
+        final_output_key = f"processed-{job_id}{output_extension}"
+
         s3 = get_r2_client()
-        
-        # Download
-        print(f"Downloading {input_key} from {input_bucket_name}...")
-        s3.download_file(input_bucket_name, input_key, input_path)
-        
-        # Convert
+
+        # 3. Download Input
+        print(f"Downloading {input_key} from {INPUT_BUCKET}...")
+        s3.download_file(INPUT_BUCKET, input_key, input_path)
+
+        # 4. Progress Updates
+        update_job_status(job_id, "processing", 10)
+
+        # 5. Convert
         print(f"Converting {input_path} to {output_path}...")
+        # Basic ffmpeg command that should work for most format conversions
         command = [
             'ffmpeg',
             '-y',
             '-i', input_path,
-            '-q:v', '2',
-            '-c:a', 'copy',
             output_path
         ]
+        
+        update_job_status(job_id, "processing", 20, "Encoding video...")
+        
         subprocess.run(command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         
-        # Upload
-        print(f"Uploading {output_path} to {output_bucket_name}/{output_key}...")
-        s3.upload_file(output_path, output_bucket_name, output_key)
+        update_job_status(job_id, "processing", 90, "Uploading...")
+
+        # 6. Job Completion -> Upload
+        print(f"Uploading {output_path} to {OUTPUT_BUCKET}/{final_output_key}...")
+        s3.upload_file(output_path, OUTPUT_BUCKET, final_output_key)
+
+        # 7. Final Success Update
+        update_job_status(
+            job_id, 
+            "completed", 
+            100, 
+            "Conversion successful", 
+            output_key=final_output_key
+        )
         
-        # Cleanup
-        if os.path.exists(input_path):
-            os.remove(input_path)
-        if os.path.exists(output_path):
-            os.remove(output_path)
-            
         return jsonify({
             'status': 'success',
-            'output_key': output_key,
-            'output_bucket': output_bucket_name,
-            'input_key': input_key
+            'jobId': job_id,
+            'outputKey': final_output_key
         })
 
-    except subprocess.CalledProcessError as e:
-        return jsonify({'error': f"Conversion failed: {str(e)}"}), 500
     except Exception as e:
-        return jsonify({'error': f"An error occurred: {str(e)}"}), 500
+        error_msg = str(e)
+        print(f"Job {job_id} failed: {error_msg}")
+        traceback.print_exc()
+        update_job_status(job_id, "failed", message=error_msg)
+        return jsonify({'error': error_msg}), 500
+    
+    finally:
+        # Cleanup
+        if input_path and os.path.exists(input_path):
+            try:
+                os.remove(input_path)
+            except:
+                pass
+        if output_path and os.path.exists(output_path):
+            try:
+                os.remove(output_path)
+            except:
+                pass
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
